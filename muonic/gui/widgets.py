@@ -23,7 +23,7 @@ from muonic.gui.helpers import HistoryAwareLineEdit
 from muonic.gui.plot_canvases import ScalarsCanvas, LifetimeCanvas
 from muonic.gui.plot_canvases import PulseCanvas, PulseWidthCanvas
 from muonic.gui.plot_canvases import VelocityCanvas
-from muonic.gui.dialogs import DecayConfigDialog
+from muonic.gui.dialogs import DecayConfigDialog, DistanceDialog
 from muonic.gui.dialogs import VelocityConfigDialog, FitRangeConfigDialog
 from muonic.analysis import fit, gaussian_fit
 from muonic.analysis import VelocityTrigger, DecayTriggerThorough
@@ -490,6 +490,29 @@ class RateWidget(BaseWidget):
 
         # write column headers if this is the first run
         if self.first_run:
+            self.data_file.write("#Settings: \n")
+            self.data_file.write("\n")
+            for i in range(4):
+                     self.data_file.write("# Distance "   "%d cm" % get_setting("distance_ch%d" %i) +   " channel %d" % (i) + " to channel %d" % (i + 1) + '\n')
+
+            for i in range(4):
+                     #print("# Thresholds " "%d mV" % get_setting("threshold_ch%d" %i) + " chan%d" % (i))
+                     self.data_file.write("# Thresholds " "%d mV" % get_setting("threshold_ch%d" %i) + " chan%d" % (i) + "\n")
+
+            for i in range(4):
+                    #print("# Actine Channels %d " % get_setting("active_ch%d" % i) + " channel %d" % (i)) 
+                    self.data_file.write("# Actine Channels %d " % get_setting("active_ch%d" % i) + " channel %d" % (i) + "\n")
+ 
+            for i, value in enumerate(["Single", "Twofold", "Threefold","Fourfold"]):
+                   if get_setting("coincidence%d" % i):
+                      self.data_file.write("# Coincidenes %s " % value + "\n")
+                      if value == 'Single':
+                          TRIGGER_COLOR = "w"
+                          self.show_trigger = False
+                   else:
+                          self.show_trigger = True
+            self.data_file.write("\n") 
+		
             self.data_file.write("year month day hour minutes second milliseconds" +
                                  " | R0 | R1 | R2 | R3 | R trigger | " +
                            " chan0 | chan1 | chan2 | chan3 | trigger | Delta_time\n")
@@ -506,6 +529,16 @@ class RateWidget(BaseWidget):
         self.data_file.write("# new %s measurement run from: %s\n" %
                              (measurement_type,
                               self.start_time.strftime("%a %d %b %Y %H:%M:%S UTC")))
+        
+	self.data_file.write("\n")
+		
+        for i, value in enumerate(["Single", "Twofold", "Threefold","Fourfold"]):
+            if get_setting("coincidence%d" % i):
+                if value == 'Single':
+                   TRIGGER_COLOR = "w"
+                   self.show_trigger = False
+                else:
+                   self.show_trigger = True
 
         # update table fields
         for i in range(4):
@@ -552,7 +585,30 @@ class RateWidget(BaseWidget):
 
         self.data_file.write("# stopped run on: %s\n" %
                              stop_time.strftime("%a %d %b %Y %H:%M:%S UTC"))
-        self.data_file.close()
+        self.data_file.write("\n")
+        self.data_file.write("#Settings: \n")
+        self.data_file.write("\n")
+        for i in range(4):
+                 self.data_file.write("# Distance "   "%d cm" % get_setting("distance_ch%d" %i) +   " channel %d" % (i) + " to channel %d" % (i + 1) + '\n')
+
+        for i in range(4):
+         self.data_file.write("# Thresholds " "%d mV" % get_setting("threshold_ch%d" %i) + " chan%d" % (i) + "\n")
+
+        for i in range(4):
+         self.data_file.write("# Actine Channels %d " % get_setting("active_ch%d" % i) + " channel %d" % (i) + "\n")
+
+
+        for i, value in enumerate(["Single", "Twofold", "Threefold","Fourfold"]):
+                if get_setting("coincidence%d" % i):
+                   self.data_file.write("# Coincidenes %s " % value + "\n")
+                   if value == 'Single':
+                      TRIGGER_COLOR = "w"
+                      self.show_trigger = False
+                else:
+                     self.show_trigger = True
+        self.data_file.write("\n")
+
+	self.data_file.close()
 
     def finish(self):
         """
@@ -735,12 +791,14 @@ class StatusWidget(BaseWidget):
         # setup stats
         self.daq_stats = dict()
         self.daq_stats['thresholds'] = []
+	self.daq_stats['distances'] = []
         self.daq_stats['active_channels'] = []
         self.muonic_stats = dict()
 
         # setup daq stats
         for i in range(4):
             self.daq_stats['thresholds'].append(self.TEXT_UNSET)
+	    self.daq_stats['distances'].append(self.TEXT_UNSET)
             self.daq_stats['active_channels'].append(False)
 
         self.daq_stats['coincidences'] = self.TEXT_UNSET
@@ -760,6 +818,7 @@ class StatusWidget(BaseWidget):
         # setup widgets
         self.daq_widgets = dict()
         self.daq_widgets['thresholds'] = []
+	self.daq_widgets['distances'] = []
         self.daq_widgets['active_channels'] = []
         self.muonic_widgets = dict()
 
@@ -770,6 +829,12 @@ class StatusWidget(BaseWidget):
             self.daq_widgets['thresholds'][i].setText(
                     self.daq_stats['thresholds'][i])
             self.daq_widgets['thresholds'][i].setDisabled(True)
+
+	    self.daq_widgets['distances'].append(QtGui.QLineEdit(self))
+            self.daq_widgets['distances'][i].setReadOnly(True)
+            self.daq_widgets['distances'][i].setText(
+                    self.daq_stats['distances'][i])
+            self.daq_widgets['distances'][i].setDisabled(True)
 
             self.daq_widgets['active_channels'].append(QtGui.QLineEdit(self))
             self.daq_widgets['active_channels'][i].setText('Channel %d' % i)
@@ -801,20 +866,22 @@ class StatusWidget(BaseWidget):
         layout.addWidget(QtGui.QLabel("Status of the DAQ card:"), 0, 0)
         layout.addWidget(QtGui.QLabel("Active channels:"), 1, 0)
         layout.addWidget(QtGui.QLabel("Threshold:"), 2, 0)
-        layout.addWidget(QtGui.QLabel("Trigger condition:"), 3, 0)
+	layout.addWidget(QtGui.QLabel("Distance:"), 3, 0)
+        layout.addWidget(QtGui.QLabel("Trigger condition:"), 4, 0)
         layout.addWidget(QtGui.QLabel("Time window for trigger condition:"),
-                         3, 3)
-        layout.addWidget(QtGui.QLabel("Veto:"), 4, 0)
-        layout.addWidget(QtGui.QLabel("Muon Decay Veto:"), 5, 0)
+                         4, 3)
+        layout.addWidget(QtGui.QLabel("Veto:"), 5, 0)
+        layout.addWidget(QtGui.QLabel("Muon Decay Veto:"), 6, 0)
 
         for i in range(4):
             layout.addWidget(self.daq_widgets['active_channels'][i], 1, i + 1)
             layout.addWidget(self.daq_widgets['thresholds'][i], 2, i + 1)
-
-        layout.addWidget(self.daq_widgets['coincidences'], 3, 1, 1, 2)
-        layout.addWidget(self.daq_widgets['coincidence_time'], 3, 4)
-        layout.addWidget(self.daq_widgets['veto'], 4, 1, 1, 4)
-        layout.addWidget(self.daq_widgets['decay_veto'], 5, 1, 1, 4)
+            layout.addWidget(self.daq_widgets['distances'][i], 3, i + 1)
+	
+        layout.addWidget(self.daq_widgets['coincidences'], 4, 1, 1, 2)
+        layout.addWidget(self.daq_widgets['coincidence_time'], 4, 4)
+        layout.addWidget(self.daq_widgets['veto'], 5, 1, 1, 4)
+        layout.addWidget(self.daq_widgets['decay_veto'], 6, 1, 1, 4)
 
         # add muonic status widgets
         layout.addWidget(QtGui.QLabel(self), 6, 0)
@@ -848,6 +915,8 @@ class StatusWidget(BaseWidget):
         # request status information from DAQ card
         self.daq_put('TL')
         time.sleep(0.5)
+	self.daq_put('DL')
+        time.sleep(0.5)
         self.daq_put('DC')
         time.sleep(0.5)
 
@@ -865,6 +934,8 @@ class StatusWidget(BaseWidget):
                 get_setting("active_ch%d" % i)
             self.daq_stats['thresholds'][i] = \
                 ("%d mV" % get_setting("threshold_ch%d" % i))
+	    self.daq_stats['distances'][i] = \
+                ("%d cm" % get_setting("distance_ch%d" % i))	
 
         if get_setting("veto"):
             for i in range(3):
@@ -934,6 +1005,11 @@ class StatusWidget(BaseWidget):
                     self.daq_stats['thresholds'][i])
             self.daq_widgets['thresholds'][i].setDisabled(False)
             self.daq_widgets['thresholds'][i].setEnabled(True)
+
+	    self.daq_widgets['distances'][i].setText(
+                    self.daq_stats['distances'][i])
+            self.daq_widgets['distances'][i].setDisabled(False)
+            self.daq_widgets['distances'][i].setEnabled(True)
 
             self.daq_widgets['active_channels'][i].setEnabled(
                     self.daq_stats['active_channels'][i])
@@ -1141,12 +1217,15 @@ class VelocityWidget(BaseWidget):
             self.checkbox.setChecked(True)
             self.muon_counter_label.setText("We have detected %d muons " %
                                             self.muon_counter)
-            self.active_since = datetime.datetime.utcnow()
-            self.active_since_label.setText(
-                    "The measurement is active since %s" %
-                    self.active_since.strftime("%a %d %b %Y %H:%M:%S UTC"))
-
-            for chan in range(4):
+            #self.active_since = datetime.datetime.utcnow()
+            #self.active_since_label.setText(
+            #        "The measurement is active since %s" %
+            #        self.active_since.strftime("%a %d %b %Y %H:%M:%S UTC"))
+	    i = 0          
+            self.active_since_label.setText("Distance:" "%d cm" % get_setting("distance_ch%d" %i) + " ch%d"%(i) + " to ch%d"% (i + 1) + " ,"    "%d cm" % get_setting("distance_ch%d" %(i + 1)) + " ch%d" %(i + 1) + " to ch%d" %(i + 2) + " ," "%d cm" % get_setting("distance_ch%d" %(i + 2)) + " ch%d" %(i + 2) + " to ch%d" %(i + 3) + " ," "%d cm" % get_setting("distance_ch%d" %(i + 3))
++ " ch%d" %(i + 3)  + " to ch%d" %(i + 4))
+			
+	    for chan in range(4):
                 if dialog.get_widget_value("upper_checkbox_%d" % chan):
                     self.upper_channel = chan + 1  # chan index is shifted
                 if dialog.get_widget_value("lower_checkbox_%d" % chan):
@@ -1177,11 +1256,15 @@ class VelocityWidget(BaseWidget):
             # write pulses to file
             self.pulse_extractor.write_pulses(True)
         else:
-            self.logger.info("Moun velocity config canceled")
+            self.logger.info("Muon velocity config canceled")
             self.active(False)
             self.checkbox.setChecked(False)
-            self.active_since_label.setText("")
-
+            #self.active_since_label.setText("")
+            i = 0
+            self.active_since_label.setText("Distance:" "%d cm" % get_setting("distance_ch%d" %i) + " ch%d"%(i) + " to ch%d"% (i + 1) + " ,"    "%d cm" % get_setting("distance_ch%d" %(i + 1)) + " ch%d" %(i + 1) + " to ch%d" %(i + 2) + " ," "%d cm" % get_setting("distance_ch%d" %(i + 2)) + " ch%d" %(i + 2) + " to ch%d" %(i + 3) + " ," "%d cm" % get_setting("distance_ch%d" %(i + 3))
++ " ch%d" %(i + 3)  + " to ch%d" %(i + 4))
+		
+		
     def stop(self):
         """
         Stop detecting muons
@@ -1210,7 +1293,7 @@ class VelocityWidget(BaseWidget):
 
         self.active(False)
         self.checkbox.setChecked(False)
-        self.active_since_label.setText("")
+        #self.active_since_label.setText("")
         self.parent.status_bar.removeWidget(self.running_status)
         self.parent.get_widget("rate").stop()
 
@@ -1240,8 +1323,9 @@ class VelocityWidget(BaseWidget):
                 rename_muonic_file(self.measurement_duration,
                                    self.mu_file.get_filename())
             except (OSError, IOError):
-                pass
-
+                #pass
+                pit.cla()
+                pit.clf()                
 
 class DecayWidget(BaseWidget):
     """
@@ -1276,8 +1360,9 @@ class DecayWidget(BaseWidget):
         self.binning = (0, 10, 21)
 
         # default fit range
-        self.fit_range = (1.5, 10.)
-
+        #self.fit_range = (1.5, 10.)
+        self.fit_range = (0.5, 10.)
+        
         self.event_data = []
         self.last_event_time = None
         self.active_since = None

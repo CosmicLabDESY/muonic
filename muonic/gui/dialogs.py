@@ -293,6 +293,33 @@ class ThresholdDialog(BaseDialog):
 
         self.show()
 
+class DistanceDialog(BaseDialog):
+    """
+    Dialog to adjust the distances
+
+    :param distnace:s the distnace for the four channels
+    :type distnaces: list of int
+    """
+
+    def __init__(self, distances):
+        BaseDialog.__init__(self, "Distances")
+
+        layout = QtGui.QVBoxLayout(self)
+
+        for channel, distance in enumerate(distances):
+            spinbox = QtGui.QSpinBox()
+            spinbox.setMaximum(1000)
+            spinbox.setObjectName("distance_ch_%d" % channel)
+            spinbox.setValue(int(distance))
+            spinbox.setSuffix(' cm')
+            layout.addWidget(QtGui.QLabel("Channel %d" % channel))
+            layout.addWidget(spinbox)
+
+#        layout.addWidget(self.button_box(left=0))
+        layout.addWidget(self.button_box(left=1))
+
+
+        self.show()
 
 class ConfigDialog(BaseDialog):
     """
@@ -455,5 +482,6 @@ if __name__ == "__main__":
     config_dialog = ConfigDialog()
     decay_dialog = DecayConfigDialog()
     threshold_dialog = ThresholdDialog([42, 42, 42, 42])
+    distance_dialog = DistanceDialog([42, 42, 42, 42])
     velocity_dialog = VelocityConfigDialog()
     sys.exit(app.exec_())

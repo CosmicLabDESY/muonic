@@ -6,6 +6,7 @@ edges of the pulses.
 from __future__ import print_function
 import datetime
 import os
+import time
 
 from muonic.util import rename_muonic_file, get_hours_from_duration
 from muonic.util import WrappedFile
@@ -102,6 +103,11 @@ class PulseExtractor:
                 self.pulse_file.open("a")
                 self.logger.debug("Starting to write pulses to %s" %
                                   repr(self.pulse_file))
+                print("Pulse file")
+        # open file for writing and add comment
+                measurement_type = "pulse"
+                self.pulse_file.write("# new pulse measurement run from:  %s\n" %  
+                           self.start_time.strftime("%a %d %b %Y %H:%M:%S UTC"))
             else:
                 stop_time = datetime.datetime.utcnow()
 
@@ -299,7 +305,7 @@ class PulseExtractor:
             self.last_fe = self.fe
 
             pulses = self._order_and_clean_pulses()
-            extracted_pulses = (self.last_trigger_time, pulses["ch0"],
+            extracted_pulses = (str(datetime.datetime.utcnow()), pulses["ch0"],
                                 pulses["ch1"], pulses["ch2"], pulses["ch3"])
 
             if self._write_pulses:

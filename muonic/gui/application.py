@@ -15,7 +15,7 @@ from muonic import __docs_hosted_at__, __manual_hosted_at__
 from muonic.analysis import PulseExtractor
 from muonic.daq import DAQIOError
 from muonic.gui.helpers import set_large_plot_style
-from muonic.gui.dialogs import ThresholdDialog, ConfigDialog
+from muonic.gui.dialogs import ThresholdDialog, DistanceDialog, ConfigDialog
 from muonic.gui.dialogs import HelpDialog, AdvancedDialog
 from muonic.gui.widgets import VelocityWidget, PulseAnalyzerWidget
 from muonic.gui.widgets import DecayWidget, DAQWidget, RateWidget
@@ -148,7 +148,7 @@ class Application(QtGui.QMainWindow):
 
     def get_configuration_from_daq_card(self):
         """
-        Get the initial threshold and channel configuration
+        Get the initial threshold, distance and channel configuration
         from the DAQ card.
 
         :returns: None
@@ -166,6 +166,19 @@ class Application(QtGui.QMainWindow):
             except DAQIOError:
                 self.logger.debug("Queue empty!")
 
+        # get the distanes
+        self.daq.put('DL')
+        # give the daq some time to react
+        time.sleep(0.5)
+
+        while self.daq.data_available():
+            try:
+                msg = self.daq.get(0)
+                self.get_distances_from_msg(msg)
+
+            except DAQIOError:
+                self.logger.debug("Queue empty!")
+        
         # get the channel config
         self.daq.put('DC')
         # give the daq some time to react
@@ -270,10 +283,16 @@ class Application(QtGui.QMainWindow):
         self.connect(advanced_action, QtCore.SIGNAL('triggered()'),
                      self.advanced_menu)
 
+        distances_action = QtGui.QAction('Distances', self)
+        distances_action.setStatusTip('Set trigger distances')
+        self.connect(distances_action, QtCore.SIGNAL('triggered()'),
+                     self.distance_menu)
+
         settings_menu.addAction(config_action)
         settings_menu.addAction(thresholds_action)
         settings_menu.addAction(advanced_action)
-
+        settings_menu.addAction(distances_action)
+        
         # create help menu
         help_menu = menu_bar.addMenu('&Help')
 
@@ -396,6 +415,41 @@ class Application(QtGui.QMainWindow):
 
         self.daq.put('TL')
   
+    def distance_menu(self):
+        """
+        Shows distance dialog.
+
+        :returns: None
+        """
+        # get the actual distance from the DAQ card
+        self.daq.put('DL')
+
+        # wait explicitly until the distance get loaded
+        self.logger.info("loading distance idnformation..")
+        time.sleep(1.5)
+
+        # get distance from settings
+        distances = [get_setting("distance_ch%d" % i, 100) for i in range(4)]
+
+        # show dialog
+        dialog = DistanceDialog(distances)
+
+        if dialog.exec_() == 1:
+            commands = []
+
+            # update distance config
+            for ch in range(4):
+                val = dialog.get_widget_value("distance_ch_%d" % ch)
+                update_setting("distance_ch%d" % ch, val)
+                commands.append("DL %d %s" % (ch, val))
+
+            # apply new distance to daq card
+            for cmd in commands:
+                self.daq.put(cmd)
+                self.logger.info("Set distance of channel %s to %s" %
+                                 (cmd.split()[1], cmd.split()[2]))
+        self.daq.put('DL')
+
     def open_muonic_data(self):
         """
         Opens the folder with the data files. Usually in $HOME/muonic_data
@@ -638,6 +692,32 @@ class Application(QtGui.QMainWindow):
             return True
         else:
             return False
+
+    def get_distances_from_msg(self, msg):
+        """
+        Explicitly scan message for distance information.
+
+        Return True if found, False otherwise.
+        :param msg: daq message
+        :type msg: str
+        :returns: bool
+        """
+        if msg.startswith('DL') and len(msg) > 9:
+            msg = msg.split('=')
+            update_setting("distance_ch0", int(msg[1][:-2]))
+            update_setting("distance_ch1", int(msg[2][:-2]))
+            update_setting("distance_ch2", int(msg[3][:-2]))
+            update_setting("distance_ch3", int(msg[4]))
+            self.logger.debug("Got Distances %d %d %d %d" %
+                              tuple([get_setting("distance_ch%d" % i)
+                                     for i in range(4)]))
+            print ("Got Distances %d %d %d %d" %
+                              tuple([get_setting("distance_ch%d" % i)
+                                     for i in range(4)]))
+
+            return True
+        else:
+            return False
         
     def get_channels_from_msg(self, msg):
         """
@@ -792,6 +872,10 @@ class Application(QtGui.QMainWindow):
 
             # check for threshold information
             if self.get_thresholds_from_msg(msg):
+                continue
+
+            # check for distance information
+            if self.get_distances_from_msg(msg):
                 continue
 
             # check for channel configuration

@@ -2,6 +2,7 @@
 Provides the canvases for plots in muonic
 """
 from matplotlib.figure import Figure
+from muonic.util import get_setting
 from matplotlib.backends.backend_qt4agg \
     import FigureCanvasQTAgg as FigureCanvas
 try:
@@ -362,7 +363,15 @@ class ScalarsCanvas(BasePlotCanvas):
 
         BasePlotCanvas.__init__(self, parent, logger, ymin=0, ymax=20,
                                 xlabel="Time (s)", ylabel="Rate (1/s)")
-        self.show_trigger = True
+        
+        for i, value in enumerate(["Single", "Twofold", "Threefold","Fourfold"]):
+            if get_setting("coincidence%d" % i):
+                if value == 'Single':
+                   TRIGGER_COLOR = "w"
+                   self.show_trigger = False
+                else:
+                   self.show_trigger = True
+                
         self.max_length = max_length
         self.channel_data = [[], [], [], []]
         self.trigger_data = []
@@ -411,7 +420,9 @@ class ScalarsCanvas(BasePlotCanvas):
 
         self.fig.canvas.draw()
 
-    def update_plot(self, data, show_trigger=True,
+    #def update_plot(self, data, show_trigger=True,
+    #                enabled_channels=DEFAULT_CHANNEL_CONFIG):
+    def update_plot(self, data, show_trigger,
                     enabled_channels=DEFAULT_CHANNEL_CONFIG):
         """
         Update plot
